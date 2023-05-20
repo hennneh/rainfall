@@ -1,0 +1,15 @@
+void main(void)
+{
+    undefined auStack80 [76];
+    
+    gets(auStack80);
+    return;
+}
+
+void run(void)
+{
+    fwrite("Good... Wait what?\n", 1, 0x13, _stdout);
+    system("/bin/sh");
+    return;
+}
+
