@@ -12,6 +12,12 @@ int32_t N::operator-(N&)(int32_t arg_8h, int32_t arg_ch)
     return *(int32_t *)(arg_8h + 0x68) - *(int32_t *)(arg_ch + 0x68);
 }
 
+int32_t fcn.0804873a(int32_t arg_8h, int32_t arg_ch)
+{
+    // N::operator+(N&)
+    return *(int32_t *)(arg_ch + 0x68) + *(int32_t *)(arg_8h + 0x68);
+}
+
 void N::setAnnotation(char*)(void *s1, char *s)
 {
     undefined4 uVar1;
