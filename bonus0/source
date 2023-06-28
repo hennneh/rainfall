@@ -1,0 +1,52 @@
+void p(char *dest, char *s)
+{
+    undefined *puVar1;
+    char *src;
+    size_t nbyte;
+    char *var_100ch;
+
+    puts(s);
+    read(0, &var_100ch, 0x1000);
+    puVar1 = (undefined *)strchr(&var_100ch, 10);
+    *puVar1 = 0;
+    strncpy(dest, &var_100ch, 0x14);
+    return;
+}
+
+void pp(char *dest)
+{
+    char cVar1;
+    uint32_t uVar2;
+    char *pcVar3;
+    uint8_t uVar4;
+    char *src;
+    int32_t var_40h;
+    int32_t var_34h;
+    int32_t var_20h;
+
+    uVar4 = 0;
+    p((char *)&var_34h, (char *)data.080486a0);
+    p((char *)&var_20h, (char *)data.080486a0);
+    strcpy(dest, &var_34h);
+    uVar2 = 0xffffffff;
+    pcVar3 = dest;
+    do {
+        if (uVar2 == 0) break;
+        uVar2 = uVar2 - 1;
+        cVar1 = *pcVar3;
+        pcVar3 = pcVar3 + (uint32_t)uVar4 * -2 + 1;
+    } while (cVar1 != '\0');
+    *(undefined2 *)(dest + (~uVar2 - 1)) = 0x20;
+    strcat(dest, &var_20h);
+    return;
+}
+
+undefined4 main(void)
+{
+    char acStack_3a [12];
+    char *s;
+
+    pp(acStack_3a);
+    puts(acStack_3a);
+    return 0;
+}
