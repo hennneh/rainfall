@@ -1,0 +1,22 @@
+n(undefined4 placeholder_0, char **envp, int32_t arg_ch)
+{
+    undefined4 uVar1;
+    void *s2;
+    size_t n;
+    void *s1;
+    int32_t iStack_14;
+    unsigned long var_8h;
+    
+    iStack_14 = atoi(envp[1]);
+    if (iStack_14 < 10) {
+        memcpy(&n, envp[2], iStack_14 * 4);
+        if (iStack_14 == 0x574f4c46) {
+            execl("/bin/sh", data.08048580, 0);
+        }
+        uVar1 = 0;
+    } else {
+        uVar1 = 1;
+    }
+    return uVar1;
+}
+
