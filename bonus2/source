@@ -1,85 +1,50 @@
-void greetuser(int32_t arg_4h)
+int __cdecl greetuser(char src)
 {
-    char *s2;
-    char *s1;
-    undefined4 uStack_48;
-    undefined4 uStack_44;
-    undefined4 uStack_40;
-    undefined2 uStack_3c;
-    char cStack_3a;
-    
-    if (_language == 1) {
-        s1 = (char *)0xc3767948;
-        uStack_48 = 0x20a4c3a4;
-        uStack_44 = 0x69a4c370;
-        uStack_40 = 0xc3a4c376;
-        uStack_3c = 0x20a4;
-        cStack_3a = '\0';
-    } else if (_language == 2) {
-        s1 = (char *)0x64656f47;
-        uStack_48 = 0x64696d65;
-        uStack_44 = 0x21676164;
-        uStack_40 = CONCAT22(uStack_40._2_2_, 0x20);
-    } else if (_language == 0) {
-        s1 = (char *)0x6c6c6548;
-        uStack_48 = CONCAT13(uStack_48._3_1_, 0x206f);
-    }
-    strcat(&s1, &arg_4h);
-    puts(&s1);
-    return;
+  __int128 dest; // [esp+10h] [ebp-48h] BYREF
+  __int16 v3; // [esp+20h] [ebp-38h]
+  char v4; // [esp+22h] [ebp-36h]
+
+  switch ( language )
+  {
+    case 1:
+      dest = xmmword_8048717;
+      v3 = *((_WORD *)&xmmword_8048717 + 8);
+      v4 = *((_BYTE *)&xmmword_8048717 + 18);
+      break;
+    case 2:
+      strcpy((char *)&dest, "Goedemiddag! ");
+      break;
+    case 0:
+      strcpy((char *)&dest, "Hello ");
+      break;
+  }
+  strcat((char *)&dest, &src);
+  return puts((const char *)&dest);
 }
 
-undefined4 main(char **argv, char **envp)
+int __cdecl main(int argc, const char **argv, const char **envp)
 {
-    undefined4 uVar1;
-    char *pcVar2;
-    int32_t iVar3;
-    char **ppcVar4;
-    char **ppcVar5;
-    uint8_t uVar6;
-    char *arg_4h;
-    char *src;
-    size_t var_a8h;
-    size_t n;
-    char *dest;
-    char *s1;
-    int32_t var_10h;
-    
-    uVar6 = 0;
-    if (argv == (char **)0x3) {
-        ppcVar4 = &dest;
-        for (iVar3 = 0x13; iVar3 != 0; iVar3 = iVar3 + -1) {
-            *ppcVar4 = (char *)0x0;
-            ppcVar4 = ppcVar4 + 1;
-        }
-        strncpy();
-        strncpy();
-        arg_4h = "LANG";
-        pcVar2 = (char *)getenv();
-        s1 = pcVar2;
-        if (pcVar2 != (char *)0x0) {
-            iVar3 = memcmp();
-            if (iVar3 == 0) {
-                _language = 1;
-                arg_4h = pcVar2;
-            } else {
-                arg_4h = s1;
-                iVar3 = memcmp();
-                if (iVar3 == 0) {
-                    _language = 2;
-                }
-            }
-        }
-        ppcVar4 = &dest;
-        ppcVar5 = (char **)&stack0xffffff50;
-        for (iVar3 = 0x13; iVar3 != 0; iVar3 = iVar3 + -1) {
-            *ppcVar5 = *ppcVar4;
-            ppcVar4 = ppcVar4 + (uint32_t)uVar6 * -2 + 1;
-            ppcVar5 = ppcVar5 + (uint32_t)uVar6 * -2 + 1;
-        }
-        uVar1 = greetuser((int32_t)arg_4h);
-    } else {
-        uVar1 = 1;
+  char v4[76]; // [esp+0h] [ebp-ACh] BYREF
+  char dest[76]; // [esp+50h] [ebp-5Ch] BYREF
+  char *v6; // [esp+9Ch] [ebp-10h]
+
+  if ( argc != 3 )
+    return 1;
+  memset(dest, 0, sizeof(dest));
+  strncpy(dest, argv[1], 0x28u);
+  strncpy(&dest[40], argv[2], 0x20u);
+  v6 = getenv("LANG");
+  if ( v6 )
+  {
+    if ( !memcmp(v6, "fi", 2u) )
+    {
+      language = 1;
     }
-    return uVar1;
+    else if ( !memcmp(v6, "nl", 2u) )
+    {
+      language = 2;
+    }
+  }
+  qmemcpy(v4, dest, sizeof(v4));
+  return greetuser(v4[0]);
 }
